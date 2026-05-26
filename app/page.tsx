@@ -41,12 +41,18 @@ interface DrawnPath {
   color: string;
 }
 
+interface BenchPlayer {
+  id: string;
+  data: SlotData;
+}
+
 interface SavedPlan {
   id: string;
   name: string;
   formation: string;
   teamName: string;
   lineup: Record<string, SlotData>;
+  bench: BenchPlayer[];
   arrows: DrawnArrow[];
   zones: DrawnZone[];
   paths: DrawnPath[];
@@ -252,7 +258,7 @@ function EditModal({ slotLabel, initial, onSave, onClose }: {
    SAVE/LOAD MODAL
 ═══════════════════════════════════════════════════════ */
 function SaveLoadModal({ current, onLoad, onClose }: {
-  current: Omit<SavedPlan, 'id' | 'savedAt'>;
+  current: Omit<SavedPlan, 'id' | 'savedAt'> & { bench: BenchPlayer[] };
   onLoad: (plan: SavedPlan) => void;
   onClose: () => void;
 }) {
@@ -512,6 +518,12 @@ export default function LineupBuilder() {
   const [teamName, setTeamName] = useState('Takımım');
   const [sidebarTab, setSidebarTab] = useState<'lineup' | 'draw' | 'kit'>('lineup');
 
+  // Bench
+  const [bench, setBench] = useState<BenchPlayer[]>([]);
+  const [editBenchId, setEditBenchId] = useState<string | null>(null); // 'new' | existing id
+  const [benchDragOver, setBenchDragOver] = useState<string | null>(null);
+  const [benchDragging, setBenchDragging] = useState<string | null>(null); // bench player id
+
   // Drawing state
   const [drawTool, setDrawTool] = useState<DrawTool>('none');
   const [arrowStyle, setArrowStyle] = useState<ArrowStyle>('attack');
@@ -535,9 +547,9 @@ export default function LineupBuilder() {
 
   // Auto-save to localStorage every change
   useEffect(() => {
-    const state = { formation, lineup, teamName, arrows, zones, paths, globalKitColor, globalKitPattern };
+    const state = { formation, lineup, bench, teamName, arrows, zones, paths, globalKitColor, globalKitPattern };
     localStorage.setItem('lineup_autosave', JSON.stringify(state));
-  }, [formation, lineup, teamName, arrows, zones, paths, globalKitColor, globalKitPattern]);
+  }, [formation, lineup, bench, teamName, arrows, zones, paths, globalKitColor, globalKitPattern]);
 
   // Restore autosave on mount
   useEffect(() => {
@@ -547,6 +559,7 @@ export default function LineupBuilder() {
         const s = JSON.parse(raw);
         if (s.formation) setFormation(s.formation);
         if (s.lineup) setLineup(s.lineup);
+        if (s.bench) setBench(s.bench);
         if (s.teamName) setTeamName(s.teamName);
         if (s.arrows) setArrows(s.arrows);
         if (s.zones) setZones(s.zones);
@@ -575,7 +588,7 @@ export default function LineupBuilder() {
   };
 
   const handleRemove = (role: string) => setLineup(prev => { const n = { ...prev }; delete n[role]; return n; });
-  const clearAll = () => { setLineup({}); setArrows([]); setZones([]); setPaths([]); };
+  const clearAll = () => { setLineup({}); setBench([]); setArrows([]); setZones([]); setPaths([]); };
 
   const handleDragStart = (e: React.DragEvent, role: string) => {
     if (drawTool !== 'none') return;
@@ -610,6 +623,7 @@ export default function LineupBuilder() {
   const loadPlan = (plan: SavedPlan) => {
     setFormation(plan.formation);
     setLineup(plan.lineup);
+    setBench(plan.bench || []);
     setTeamName(plan.teamName);
     setArrows(plan.arrows || []);
     setZones(plan.zones || []);
@@ -619,7 +633,7 @@ export default function LineupBuilder() {
   };
 
   const currentPlanData: Omit<SavedPlan,'id'|'savedAt'> = {
-    name: teamName, formation, teamName, lineup, arrows, zones, paths, kitColor: globalKitColor, kitPattern: globalKitPattern,
+    name: teamName, formation, teamName, lineup, bench, arrows, zones, paths, kitColor: globalKitColor, kitPattern: globalKitPattern,
   };
 
   const editingSlot = editSlot ? currentFormation.positions.find(p => p.role === editSlot) : null;
@@ -633,6 +647,61 @@ export default function LineupBuilder() {
     return () => obs.disconnect();
   }, []);
 
+  // Bench handlers
+  const addBenchPlayer = (data: SlotData) => {
+    setBench(prev => [...prev, { id: uid(), data }]);
+    setEditBenchId(null);
+  };
+  const updateBenchPlayer = (id: string, data: SlotData) => {
+    setBench(prev => prev.map(p => p.id === id ? { ...p, data } : p));
+    setEditBenchId(null);
+  };
+  const removeBenchPlayer = (id: string) => setBench(prev => prev.filter(p => p.id !== id));
+
+  // Swap bench ↔ pitch via drag
+  const handleBenchDragStart = (e: React.DragEvent, benchId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    setBenchDragging(benchId);
+    setDragging(null);
+  };
+  // Drop a pitch-dragged player onto a bench slot → swap
+  const handleBenchSlotDrop = (e: React.DragEvent, benchId: string) => {
+    e.preventDefault();
+    setBenchDragOver(null);
+    if (dragging && lineup[dragging]) {
+      // pitch player → bench: swap with bench player
+      const pitchPlayer = lineup[dragging];
+      const benchPlayer = bench.find(p => p.id === benchId);
+      setLineup(prev => { const n = { ...prev }; if (benchPlayer) n[dragging] = benchPlayer.data; else delete n[dragging]; return n; });
+      setBench(prev => prev.map(p => p.id === benchId ? { ...p, data: pitchPlayer } : p));
+      setDragging(null);
+    } else if (benchDragging && benchDragging !== benchId) {
+      // bench ↔ bench reorder
+      setBench(prev => {
+        const arr = [...prev];
+        const ai = arr.findIndex(p => p.id === benchDragging);
+        const bi = arr.findIndex(p => p.id === benchId);
+        if (ai !== -1 && bi !== -1) { [arr[ai], arr[bi]] = [arr[bi], arr[ai]]; }
+        return arr;
+      });
+      setBenchDragging(null);
+    }
+  };
+  // Drop bench player onto a pitch slot
+  const handlePitchDropFromBench = (targetRole: string) => {
+    if (!benchDragging) return;
+    const benchPlayer = bench.find(p => p.id === benchDragging);
+    if (!benchPlayer) return;
+    const existingPitch = lineup[targetRole];
+    setLineup(prev => ({ ...prev, [targetRole]: benchPlayer.data }));
+    if (existingPitch) {
+      setBench(prev => prev.map(p => p.id === benchDragging ? { ...p, data: existingPitch } : p));
+    } else {
+      setBench(prev => prev.filter(p => p.id !== benchDragging));
+    }
+    setBenchDragging(null);
+  };
+
   const KIT_COLORS_GLOBAL = ['#dc2626','#ea580c','#f59e0b','#16a34a','#2563eb','#7c3aed','#db2777','#0891b2','#111827','#ffffff','#6b7280','#f5c518'];
 
   return (
@@ -645,6 +714,21 @@ export default function LineupBuilder() {
           onSave={data => handleSave(editSlot, data)}
           onClose={() => setEditSlot(null)} />
       )}
+      {editBenchId === 'new' && (
+        <EditModal slotLabel="Yedek"
+          initial={{ name:'', pos:'MID', number:'', kitColor:globalKitColor, kitPattern:globalKitPattern, note:'' }}
+          onSave={addBenchPlayer}
+          onClose={() => setEditBenchId(null)} />
+      )}
+      {editBenchId && editBenchId !== 'new' && (() => {
+        const bp = bench.find(p => p.id === editBenchId);
+        return bp ? (
+          <EditModal slotLabel="Yedek"
+            initial={bp.data}
+            onSave={data => updateBenchPlayer(editBenchId, data)}
+            onClose={() => setEditBenchId(null)} />
+        ) : null;
+      })()}
       {showSaveLoad && (
         <SaveLoadModal current={currentPlanData} onLoad={loadPlan} onClose={() => setShowSaveLoad(false)} />
       )}
@@ -899,12 +983,104 @@ export default function LineupBuilder() {
                 isDragOver={dragOver === slot.role}
                 onDragOver={() => setDragOver(slot.role)}
                 onDragLeave={() => setDragOver(null)}
-                onDrop={e => handleDrop(e, slot.role)}
+                onDrop={e => { handleDrop(e, slot.role); handlePitchDropFromBench(slot.role); }}
                 onDragStart={e => handleDragStart(e, slot.role)} />
             ))}
 
             <div style={{ position:'absolute', bottom:7, right:10, fontSize:10, color:'rgba(255,255,255,0.12)', fontFamily:'Georgia,serif', letterSpacing:2 }}>{formation}</div>
           </div>
+        </div>
+
+        {/* ── BENCH STRIP ── */}
+        <div style={{ flexShrink:0, background:'#0d1117', borderTop:'2px solid #21262d', padding:'10px 14px 12px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <span style={{ fontSize:10, fontWeight:800, color:'#8b949e', letterSpacing:2, textTransform:'uppercase' }}>Yedek Kulübesi</span>
+            <span style={{ fontSize:10, color:'#8b949e', background:'#21262d', borderRadius:10, padding:'1px 7px', fontWeight:700 }}>{bench.length}/9</span>
+            <div style={{ flex:1, height:'1px', background:'#21262d' }} />
+            {bench.length < 9 && (
+              <button onClick={() => setEditBenchId('new')}
+                style={{ background:'#21262d', border:'1px dashed #30363d', color:'#8b949e', padding:'4px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+                <span style={{ color:'#00ff87', fontSize:14 }}>+</span> Yedek Ekle
+              </button>
+            )}
+          </div>
+
+          <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:2 }}>
+            {bench.map((bp, idx) => {
+              const textColor = ['#ffffff','#f5c518','#fbbf24','#a3e635','#34d399','#e2e8f0'].includes(bp.data.kitColor) ? '#000' : '#fff';
+              const isOver = benchDragOver === bp.id;
+              return (
+                <div key={bp.id}
+                  draggable
+                  onDragStart={e => handleBenchDragStart(e, bp.id)}
+                  onDragOver={e => { e.preventDefault(); setBenchDragOver(bp.id); }}
+                  onDragLeave={() => setBenchDragOver(null)}
+                  onDrop={e => handleBenchSlotDrop(e, bp.id)}
+                  style={{
+                    flexShrink:0, width:88, background:'#161b22',
+                    border:`1.5px solid ${isOver ? '#00ff87' : bp.data.kitColor + '55'}`,
+                    borderRadius:8, padding:'8px 6px 6px',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:5,
+                    cursor:'grab', transition:'all 0.12s',
+                    boxShadow: isOver ? '0 0 0 2px #00ff8744' : 'none',
+                    position:'relative',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = bp.data.kitColor + 'aa')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = isOver ? '#00ff87' : bp.data.kitColor + '55')}
+                >
+                  <div style={{ position:'absolute', top:4, left:6, fontSize:8, color:'#8b949e', fontWeight:700 }}>#{idx + 12}</div>
+                  <button onClick={() => removeBenchPlayer(bp.id)}
+                    style={{ position:'absolute', top:3, right:4, background:'none', border:'none', color:'#ff444488', cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#ff4444')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#ff444488')}>×</button>
+                  <div onClick={() => setEditBenchId(bp.id)} style={{ cursor:'pointer' }}>
+                    <KitCircle color={bp.data.kitColor} pattern={bp.data.kitPattern} size={44} initials={getInitials(bp.data.name)} number={bp.data.number} textColor={textColor} />
+                  </div>
+                  <div onClick={() => setEditBenchId(bp.id)} style={{ cursor:'pointer', textAlign:'center', width:'100%' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#f0f6fc', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{bp.data.name}</div>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3, marginTop:2 }}>
+                      <span style={{ fontSize:8, background: POSITION_COLORS[bp.data.pos].bg, color: POSITION_COLORS[bp.data.pos].text, borderRadius:3, padding:'1px 4px', fontWeight:700 }}>{bp.data.pos}</span>
+                      {bp.data.number && <span style={{ fontSize:8, color:'#8b949e' }}>#{bp.data.number}</span>}
+                    </div>
+                    {bp.data.note && <div style={{ fontSize:8, color:'#8b949e', marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{bp.data.note}</div>}
+                  </div>
+                </div>
+              );
+            })}
+
+            {Array.from({ length: Math.max(0, Math.min(4, 9 - bench.length)) }).map((_, i) => (
+              <div key={`empty-${i}`}
+                onDragOver={e => { e.preventDefault(); setBenchDragOver(`empty-${i}`); }}
+                onDragLeave={() => setBenchDragOver(null)}
+                onDrop={e => {
+                  e.preventDefault(); setBenchDragOver(null);
+                  if (dragging && lineup[dragging]) {
+                    const pitchPlayer = lineup[dragging];
+                    setLineup(prev => { const n = { ...prev }; delete n[dragging]; return n; });
+                    setBench(prev => [...prev, { id: uid(), data: pitchPlayer }]);
+                    setDragging(null);
+                  }
+                }}
+                onClick={() => setEditBenchId('new')}
+                style={{
+                  flexShrink:0, width:88, height:110,
+                  background: benchDragOver === `empty-${i}` ? 'rgba(0,255,135,0.07)' : 'rgba(255,255,255,0.02)',
+                  border:`1.5px dashed ${benchDragOver === `empty-${i}` ? '#00ff87' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius:8, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4,
+                  cursor:'pointer', transition:'all 0.12s',
+                }}
+              >
+                <span style={{ fontSize:22, opacity:0.2 }}>+</span>
+                <span style={{ fontSize:9, color:'rgba(255,255,255,0.2)', fontWeight:600 }}>Yedek</span>
+              </div>
+            ))}
+          </div>
+
+          {bench.length > 0 && (
+            <div style={{ marginTop:6, fontSize:9, color:'#8b949e', textAlign:'center' }}>
+              Sürükle → sahaya taşı &nbsp;·&nbsp; Tıkla → düzenle &nbsp;·&nbsp; × → çıkar
+            </div>
+          )}
         </div>
       </div>
     </div>
