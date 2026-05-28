@@ -667,18 +667,18 @@ export default function LineupBuilder(){
             <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 50%,transparent 55%,${theme.vignette} 100%)`,pointerEvents:'none',zIndex:2}}/>
             {/* Lines */}
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',zIndex:1}} viewBox="0 0 100 100" preserveAspectRatio="none">
-              <rect x="3" y="2" width="94" height="96" fill="none" stroke={theme.line} strokeWidth="0.35" opacity={theme.lineOpacity??0.9}/>
-              <line x1="3" y1="50" x2="97" y2="50" stroke={theme.line} strokeWidth="0.3" opacity={theme.lineOpacity??0.9}/>
-              <circle cx="50" cy="50" r="10" fill="none" stroke={theme.line} strokeWidth="0.3" opacity={theme.lineOpacity??0.9}/>
-              <circle cx="50" cy="50" r="0.6" fill={theme.line} opacity={theme.lineOpacity??0.9}/>
-              <rect x="22" y="2" width="56" height="17" fill="none" stroke={theme.line} strokeWidth="0.3" opacity={theme.lineOpacity??0.9}/>
-              <rect x="35" y="2" width="30" height="7" fill="none" stroke={theme.line} strokeWidth="0.3" opacity={theme.lineOpacity??0.9}/>
-              <circle cx="50" cy="13" r="0.5" fill={theme.line} opacity={theme.lineOpacity??0.9}/>
-              <rect x="22" y="81" width="56" height="17" fill="none" stroke={theme.line} strokeWidth="0.3" opacity={theme.lineOpacity??0.9}/>
-              <rect x="35" y="91" width="30" height="7" fill="none" stroke={theme.line} strokeWidth="0.3" opacity={theme.lineOpacity??0.9}/>
-              <circle cx="50" cy="87" r="0.5" fill={theme.line} opacity={theme.lineOpacity??0.9}/>
-              <rect x="40" y="0" width="20" height="2" fill="rgba(255,255,255,0.12)" stroke={theme.line} strokeWidth="0.25" opacity={theme.lineOpacity??0.9}/>
-              <rect x="40" y="98" width="20" height="2" fill="rgba(255,255,255,0.12)" stroke={theme.line} strokeWidth="0.25" opacity={theme.lineOpacity??0.9}/>
+              <rect x="3" y="2" width="94" height="96" fill="none" stroke={theme.line} strokeWidth="0.35"/>
+              <line x1="3" y1="50" x2="97" y2="50" stroke={theme.line} strokeWidth="0.3"/>
+              <circle cx="50" cy="50" r="10" fill="none" stroke={theme.line} strokeWidth="0.3"/>
+              <circle cx="50" cy="50" r="0.6" fill={theme.line}/>
+              <rect x="22" y="2" width="56" height="17" fill="none" stroke={theme.line} strokeWidth="0.3"/>
+              <rect x="35" y="2" width="30" height="7" fill="none" stroke={theme.line} strokeWidth="0.3"/>
+              <circle cx="50" cy="13" r="0.5" fill={theme.line}/>
+              <rect x="22" y="81" width="56" height="17" fill="none" stroke={theme.line} strokeWidth="0.3"/>
+              <rect x="35" y="91" width="30" height="7" fill="none" stroke={theme.line} strokeWidth="0.3"/>
+              <circle cx="50" cy="87" r="0.5" fill={theme.line}/>
+              <rect x="40" y="0" width="20" height="2" fill="rgba(255,255,255,0.12)" stroke={theme.line} strokeWidth="0.25"/>
+              <rect x="40" y="98" width="20" height="2" fill="rgba(255,255,255,0.12)" stroke={theme.line} strokeWidth="0.25"/>
             </svg>
             {/* Snow particles */}
             {pitchTheme==='snow'&&[...Array(18)].map((_,i)=><div key={i} style={{position:'absolute',left:`${(i*17+7)%97}%`,top:`${(i*23+5)%95}%`,width:Math.random()*4+2,height:Math.random()*4+2,borderRadius:'50%',background:'rgba(255,255,255,0.7)',pointerEvents:'none',zIndex:3}}/>)}
@@ -695,7 +695,7 @@ export default function LineupBuilder(){
               const animPos=animating&&animPositions[slot.role]?animPositions[slot.role]:undefined;
               return(<PitchCard key={slot.role} slotRole={slot.role} slotLabel={slot.label}
                 data={lineup[slot.role]} subData={subs[slot.role]}
-                x={pos.x} y={pos.y} pitchW={0} pitchH={0}
+                x={pos.x} y={pos.y}
                 animX={animPos?.x} animY={animPos?.y}
                 onDragStartCard={handleDragStartCard} onDropOnCard={handleDropOnCard}
                 isDragTarget={dragOverRole===slot.role} drawTool={drawTool}
