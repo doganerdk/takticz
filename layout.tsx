@@ -61,7 +61,7 @@ const PLAYERS: Player[] = [
   { id: 'p43', name: 'Raphinha', shortName: 'Raphinha', position: 'FWD', club: 'Barcelona', nationality: 'Brazil', rating: 87, number: 11, photoUrl: 'https://cdn.sofifa.net/players/234/519/25_120.png', flag: '🇧🇷' },
 ];
 
-interface FormationPosition {
+interface _FormationPosition {
   role: string;
   x: number;
   y: number;
@@ -70,7 +70,7 @@ interface FormationPosition {
 
 interface Formation {
   name: string;
-  positions: FormationPosition[];
+  positions: _FormationPosition[];
 }
 
 const FORMATIONS: Record<string, Formation> = {
